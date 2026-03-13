@@ -306,6 +306,13 @@
             <input type="range" id="mouseFalloff" min="0.5" max="20" step="0.1" value="1.2">
           </div>
         </div>
+        <div class="control-row">
+          <label>Repel Force</label>
+          <div class="right">
+            <span class="value" id="mouseRepelVal">0.40</span>
+            <input type="range" id="mouseRepel" min="0" max="2" step="0.05" value="0.4">
+          </div>
+        </div>
       </div>
     </div>
 
@@ -442,6 +449,13 @@
             <input type="range" id="gridGlowDensity" min="0.02" max="1" step="0.01" value="0.15">
           </div>
         </div>
+        <div class="control-row">
+          <label>Trail Length</label>
+          <div class="right">
+            <span class="value" id="gridTrailLengthVal">32</span>
+            <input type="range" id="gridTrailLength" min="4" max="64" step="1" value="32">
+          </div>
+        </div>
       </div>
     </div>
 
@@ -556,6 +570,7 @@
       autoRotate: false,
       rotateSpeed: 1.2,
       mouseFalloff: 1.2,
+      mouseRepel: 0.4,
       pulseSpeed: 2.0,
       pulseSharpness: 1.5,
       pulseHold: 0.25,
@@ -579,6 +594,7 @@
       gridGlowSpeed: 1.0,
       gridGlowSharpness: 12.0,
       gridGlowDensity: 0.15,
+      gridTrailLength: 32,
     };
 
     // Load saved defaults from localStorage if present
@@ -618,8 +634,9 @@
     const mouseWorld = new THREE.Vector3(9999, 9999, 0);
     const gridPlaneZ = new THREE.Plane(new THREE.Vector3(0, 0, 1), 20); // z=-20
     const mouseWorldGrid = new THREE.Vector3(9999, 9999, 0);
-    const TRAIL_LENGTH = 32;
-    const mouseTrail = new Float32Array(TRAIL_LENGTH * 2).fill(9999);
+    const MAX_TRAIL = 64;
+    const mouseTrail = new Float32Array(MAX_TRAIL * 2).fill(9999);
+    const cubeTrail = new Float32Array(MAX_TRAIL * 2).fill(9999);
     let trailTimer = 0;
 
     window.addEventListener('mousemove', (e) => {
@@ -680,7 +697,7 @@
       glowSharpness: { value: 12.0 },
       glowDensity: { value: 0.15 },
       mouseTrail: { value: mouseTrail },
-      trailCount: { value: TRAIL_LENGTH },
+      trailCount: { value: params.gridTrailLength },
       mouseFalloff: { value: params.mouseFalloff },
     };
 
@@ -707,7 +724,7 @@
         uniform float glowSpeed;
         uniform float glowSharpness;
         uniform float glowDensity;
-        uniform vec2 mouseTrail[32];
+        uniform vec2 mouseTrail[64];
         uniform int trailCount;
         uniform float mouseFalloff;
         varying vec2 vUv;
@@ -756,7 +773,7 @@
 
           // Mouse trail glow on grid lines
           float mouseOnGrid = 0.0;
-          for (int i = 0; i < 32; i++) {
+          for (int i = 0; i < 64; i++) {
             if (i >= trailCount) break;
             float fade = 1.0 - float(i) / float(trailCount);
             float mouseDist = length(vWorldPos.xy - mouseTrail[i]);
@@ -1031,7 +1048,41 @@
             amplitude: seed.amp,
             currentNeonMix: 0,
             isCenter,
+            split: false,
+            splitProgress: 0,
+            subCubes: [],
           };
+
+          // Create 8 sub-cubes (2x2x2) for split effect
+          const subSize = size / 2;
+          const subGeo = params.bevel > 0
+            ? new RoundedBoxGeometry(subSize, subSize, subSize, 2, params.bevel * 0.5)
+            : new THREE.BoxGeometry(subSize, subSize, subSize);
+          for (let sr = 0; sr < 2; sr++) {
+            for (let sc = 0; sc < 2; sc++) {
+              for (let sd = 0; sd < 2; sd++) {
+                const subMat = createCubeMaterial();
+                const subCube = new THREE.Mesh(subGeo, subMat);
+                const localX = (sc - 0.5) * subSize;
+                const localY = (0.5 - sr) * subSize;
+                const localZ = (sd - 0.5) * subSize;
+                subCube.userData = {
+                  localX, localY, localZ,
+                  currentX: localX, currentY: localY, currentZ: localZ,
+                  parentCube: cube,
+                  neonActive: false,
+                  shrinkScale: 0.6 + Math.random() * 0.3,
+                };
+                subCube.position.set(localX, localY, localZ);
+                subCube.visible = false;
+                cube.add(subCube);
+                cube.userData.subCubes.push(subCube);
+              }
+            }
+          }
+          // Pick exactly 1 random sub-cube to light up
+          const subs = cube.userData.subCubes;
+          subs[Math.floor(Math.random() * subs.length)].userData.neonActive = true;
 
           cubeGroup.add(cube);
           cubes.push(cube);
@@ -1108,30 +1159,143 @@
       trailTimer += dt;
       if (trailTimer > 0.016) { // ~60fps trail sampling
         trailTimer = 0;
-        // Shift trail down
-        for (let i = (TRAIL_LENGTH - 1) * 2; i >= 2; i -= 2) {
+        // Shift trails down
+        for (let i = (MAX_TRAIL - 1) * 2; i >= 2; i -= 2) {
           mouseTrail[i] = mouseTrail[i - 2];
           mouseTrail[i + 1] = mouseTrail[i - 1];
+          cubeTrail[i] = cubeTrail[i - 2];
+          cubeTrail[i + 1] = cubeTrail[i - 1];
         }
         mouseTrail[0] = mouseWorldGrid.x;
         mouseTrail[1] = mouseWorldGrid.y;
+        cubeTrail[0] = mouseWorld.x;
+        cubeTrail[1] = mouseWorld.y;
         gridBgUniforms.mouseTrail.value = mouseTrail;
       }
 
-      // Raycast to find the single hovered cube
-      const intersects = raycaster.intersectObjects(cubes, false);
-      const hoveredCube = intersects.length > 0 ? intersects[0].object : null;
+      // Raycast to find the single hovered cube (check sub-cubes too)
+      const intersects = raycaster.intersectObjects(cubeGroup.children, true);
+      let hoveredCube = null;
+      if (intersects.length > 0) {
+        let hit = intersects[0].object;
+        // If we hit a sub-cube, the hovered parent is its parentCube
+        if (hit.userData.parentCube) {
+          hoveredCube = hit.userData.parentCube;
+        } else {
+          hoveredCube = hit;
+        }
+      }
 
       // Center cube pulse: smooth sine between glass and neon
       const centerPulse = Math.min(1, Math.max(0, Math.sin(t * params.pulseSpeed) * params.pulseSharpness - params.pulseHold));
+
+      const SPLIT_LERP = 6.0;
+      const REPEL_RADIUS = 2.5;
+      const SUB_RETURN_SPEED = 8.0;
 
       // Update cube positions and per-cube neonMix
       for (const cube of cubes) {
         const { baseZ, phase, speed, amplitude, isCenter } = cube.userData;
         cube.position.z = baseZ + Math.sin(t * speed * params.floatSpeed + phase) * amplitude * params.floatAmp;
 
+        const isHovered = cube === hoveredCube;
+
+        // Check if cube is near any mouse trail point (for lingering split)
+        let trailInfluence = 0;
+        if (!isHovered) {
+          const cx = cube.position.x;
+          const cy = cube.position.y;
+          const trailLen = params.gridTrailLength;
+          const splitRadius = params.cubeSize * 1.2;
+          for (let i = 0; i < trailLen; i++) {
+            const tx = cubeTrail[i * 2];
+            const ty = cubeTrail[i * 2 + 1];
+            if (tx > 9000) continue;
+            const dx = cx - tx;
+            const dy = cy - ty;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < splitRadius) {
+              const fade = 1.0 - i / trailLen;
+              trailInfluence = Math.max(trailInfluence, fade);
+            }
+          }
+        }
+
+        // Animate split progress
+        const targetSplit = isHovered ? 1.0 : trailInfluence;
+        const splitLerp = isHovered ? 12.0 : SPLIT_LERP;
+        cube.userData.splitProgress += (targetSplit - cube.userData.splitProgress) * Math.min(1, dt * splitLerp);
+        const sp = cube.userData.splitProgress;
+
+        // Show/hide main geometry vs sub-cubes
+        if (sp > 0.01) {
+          cube.material.visible = false;
+          for (const sub of cube.userData.subCubes) {
+            sub.visible = true;
+          }
+        } else {
+          cube.material.visible = true;
+          for (const sub of cube.userData.subCubes) {
+            sub.visible = false;
+          }
+        }
+
+        // Repel sub-cubes from mouse
+        if (sp > 0.01) {
+          // Get cube world position
+          const cubeWorldX = cube.position.x;
+          const cubeWorldY = cube.position.y;
+          const cubeWorldZ = cube.position.z;
+
+          for (const sub of cube.userData.subCubes) {
+            // Sub-cube world pos
+            const swx = cubeWorldX + sub.userData.localX;
+            const swy = cubeWorldY + sub.userData.localY;
+
+            // Distance from mouse in world space
+            const dx = swx - mouseWorld.x;
+            const dy = swy - mouseWorld.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // Repulsion: push each sub-cube outward from center of parent cube
+            const lx = sub.userData.localX;
+            const ly = sub.userData.localY;
+            const lz = sub.userData.localZ;
+            let repelX = 0, repelY = 0, repelZ = 0;
+            if (dist < REPEL_RADIUS && dist > 0.001) {
+              const force = params.mouseRepel * (1.0 - dist / REPEL_RADIUS);
+              // XY: push away from mouse
+              repelX = (dx / dist) * force;
+              repelY = (dy / dist) * force;
+              // Z: push outward based on local Z layer (-1, 0, +1)
+              repelZ = lz > 0 ? force : lz < 0 ? -force : 0;
+            }
+            // Also always spread in Z based on split progress (so layers separate)
+            const zSpread = Math.sign(lz) * params.mouseRepel * 0.5;
+
+            // Target position = local + repulsion scaled by split progress
+            const targetX = sub.userData.localX + repelX * sp;
+            const targetY = sub.userData.localY + repelY * sp;
+            const targetZ = sub.userData.localZ + (repelZ + zSpread) * sp;
+
+            // Lerp sub-cube position
+            sub.userData.currentX += (targetX - sub.userData.currentX) * Math.min(1, dt * SUB_RETURN_SPEED);
+            sub.userData.currentY += (targetY - sub.userData.currentY) * Math.min(1, dt * SUB_RETURN_SPEED);
+            sub.userData.currentZ += (targetZ - sub.userData.currentZ) * Math.min(1, dt * SUB_RETURN_SPEED);
+
+            sub.position.set(sub.userData.currentX, sub.userData.currentY, sub.userData.currentZ);
+
+            // Scale down when split
+            const targetScale = 1.0 - (1.0 - sub.userData.shrinkScale) * sp;
+            sub.scale.setScalar(targetScale);
+
+            // Only some sub-cubes get the neon glow
+            sub.material.uniforms.neonMix.value = sub.userData.neonActive ? cube.userData.currentNeonMix : 0;
+          }
+        }
+
         let targetMix;
-        if (cube === hoveredCube) {
+        if (isHovered) {
           targetMix = 1.0;
         } else if (isCenter) {
           targetMix = centerPulse;
@@ -1208,6 +1372,7 @@
 
     // Mouse Light
     bindRange('mouseFalloff', 'mouseFalloff', null, (v) => parseFloat(v).toFixed(1));
+    bindRange('mouseRepel', 'mouseRepel');
     bindRange('pulseSpeed', 'pulseSpeed');
     bindRange('pulseSharpness', 'pulseSharpness');
     bindRange('pulseHold', 'pulseHold');
@@ -1262,6 +1427,7 @@
     bindRange('gridGlowSpeed', 'gridGlowSpeed', () => { gridBgUniforms.glowSpeed.value = params.gridGlowSpeed; });
     bindRange('gridGlowSharpness', 'gridGlowSharpness', () => { gridBgUniforms.glowSharpness.value = params.gridGlowSharpness; }, (v) => parseFloat(v).toFixed(1));
     bindRange('gridGlowDensity', 'gridGlowDensity', () => { gridBgUniforms.glowDensity.value = params.gridGlowDensity; });
+    bindRange('gridTrailLength', 'gridTrailLength', () => { gridBgUniforms.trailCount.value = params.gridTrailLength; }, (v) => parseInt(v));
 
     // Scene
     $('bgColor').addEventListener('input', (e) => {
