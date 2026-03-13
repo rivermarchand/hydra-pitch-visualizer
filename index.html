@@ -616,6 +616,11 @@
     const raycaster = new THREE.Raycaster();
     const mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     const mouseWorld = new THREE.Vector3(9999, 9999, 0);
+    const gridPlaneZ = new THREE.Plane(new THREE.Vector3(0, 0, 1), 20); // z=-20
+    const mouseWorldGrid = new THREE.Vector3(9999, 9999, 0);
+    const TRAIL_LENGTH = 32;
+    const mouseTrail = new Float32Array(TRAIL_LENGTH * 2).fill(9999);
+    let trailTimer = 0;
 
     window.addEventListener('mousemove', (e) => {
       mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -674,6 +679,9 @@
       glowSpeed: { value: 1.0 },
       glowSharpness: { value: 12.0 },
       glowDensity: { value: 0.15 },
+      mouseTrail: { value: mouseTrail },
+      trailCount: { value: TRAIL_LENGTH },
+      mouseFalloff: { value: params.mouseFalloff },
     };
 
     const gridBgMat = new THREE.ShaderMaterial({
@@ -699,6 +707,9 @@
         uniform float glowSpeed;
         uniform float glowSharpness;
         uniform float glowDensity;
+        uniform vec2 mouseTrail[32];
+        uniform int trailCount;
+        uniform float mouseFalloff;
         varying vec2 vUv;
         varying vec3 vWorldPos;
 
@@ -743,10 +754,21 @@
 
           float totalGlow = clamp(hGlow + hGlow2 + vGlow + vGlow2, 0.0, 1.0);
 
+          // Mouse trail glow on grid lines
+          float mouseOnGrid = 0.0;
+          for (int i = 0; i < 32; i++) {
+            if (i >= trailCount) break;
+            float fade = 1.0 - float(i) / float(trailCount);
+            float mouseDist = length(vWorldPos.xy - mouseTrail[i]);
+            float mouseGlow = exp(-mouseDist * mouseDist / (mouseFalloff * mouseFalloff * 2.0));
+            mouseOnGrid = max(mouseOnGrid, grid * mouseGlow * fade);
+          }
+
           // Compose
           vec3 color = bgColor;
           color += vec3(lineBrightness) * grid;
           color += glowColor * totalGlow * glowIntensity;
+          color += glowColor * mouseOnGrid * glowIntensity * 2.0;
 
           gl_FragColor = vec4(color, 1.0);
         }
@@ -1079,6 +1101,22 @@
       // Update shared uniforms
       sharedUniforms.time.value = t;
       gridBgUniforms.time.value = t;
+      gridBgUniforms.mouseFalloff.value = params.mouseFalloff;
+
+      // Project mouse onto grid plane (z=-20) and update trail
+      raycaster.ray.intersectPlane(gridPlaneZ, mouseWorldGrid);
+      trailTimer += dt;
+      if (trailTimer > 0.016) { // ~60fps trail sampling
+        trailTimer = 0;
+        // Shift trail down
+        for (let i = (TRAIL_LENGTH - 1) * 2; i >= 2; i -= 2) {
+          mouseTrail[i] = mouseTrail[i - 2];
+          mouseTrail[i + 1] = mouseTrail[i - 1];
+        }
+        mouseTrail[0] = mouseWorldGrid.x;
+        mouseTrail[1] = mouseWorldGrid.y;
+        gridBgUniforms.mouseTrail.value = mouseTrail;
+      }
 
       // Raycast to find the single hovered cube
       const intersects = raycaster.intersectObjects(cubes, false);
