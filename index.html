@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HydraDB Visualizer</title>
   <style>
+    @font-face {
+      font-family: 'Satoshi';
+      src: url('Satoshi-Regular.otf') format('opentype');
+      font-weight: 400;
+      font-style: normal;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
     canvas { display: block; }
@@ -182,9 +188,71 @@
       color: rgba(255,255,255,0.35);
       font-family: monospace;
     }
+    #demo-btn {
+      position: fixed;
+      top: 80px;
+      right: 84px;
+      z-index: 10;
+      padding: 12px 28px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      font-family: 'Satoshi', sans-serif;
+      font-weight: 400;
+      font-size: 16px;
+      color: white;
+      text-decoration: none;
+      cursor: pointer;
+      overflow: hidden;
+    }
   </style>
 </head>
 <body>
+  <a id="demo-btn" href="https://cal.com/nishkarsh-sri/enterprise" target="_blank">Book a Demo</a>
+  <div id="logo" style="position:fixed;top:24px;left:24px;z-index:10;pointer-events:none;">
+    <svg width="320" height="168" viewBox="0 0 256 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="67.3721" y="60.676" width="5.39204" height="5.39204" fill="white"/>
+    <rect x="48.5" y="60.676" width="5.39204" height="5.39204" fill="white"/>
+    <rect width="5.39204" height="5.39204" transform="matrix(-1 0 0 1 91.6363 60.676)" fill="white"/>
+    <rect x="48.5" y="55.2841" width="5.39204" height="5.39204" fill="white"/>
+    <rect width="5.39204" height="5.39204" transform="matrix(-1 0 0 1 91.6363 55.2841)" fill="white"/>
+    <rect x="53.892" y="55.2841" width="5.39204" height="5.39204" fill="white"/>
+    <rect width="5.39204" height="5.39204" transform="matrix(-1 0 0 1 86.2443 55.2841)" fill="white"/>
+    <rect x="53.892" y="49.892" width="5.39204" height="5.39204" fill="white"/>
+    <rect width="5.39204" height="5.39204" transform="matrix(-1 0 0 1 86.2443 49.892)" fill="white"/>
+    <rect x="59.2841" y="49.892" width="5.39204" height="5.39204" fill="white"/>
+    <rect width="5.39204" height="5.39204" transform="matrix(-1 0 0 1 80.8522 49.892)" fill="white"/>
+    <rect x="59.2841" y="44.5" width="5.39204" height="5.39204" fill="white"/>
+    <rect x="64.6761" y="44.5" width="5.39204" height="5.39204" fill="white"/>
+    <rect x="70.0681" y="44.5" width="5.39204" height="5.39204" fill="white"/>
+    <rect x="75.4602" y="44.5" width="5.39204" height="5.39204" fill="white"/>
+    <rect x="91.6363" y="71.4601" width="5.39204" height="5.39204" transform="rotate(-180 91.6363 71.4601)" fill="white"/>
+    <rect width="5.39204" height="5.39204" transform="matrix(1 8.74228e-08 8.74228e-08 -1 48.5 71.4601)" fill="white"/>
+    <rect x="86.2443" y="71.4601" width="5.39204" height="5.39204" transform="rotate(-180 86.2443 71.4601)" fill="white"/>
+    <rect width="5.39204" height="5.39204" transform="matrix(1 8.74228e-08 8.74228e-08 -1 53.892 71.4601)" fill="white"/>
+    <rect x="86.2443" y="76.8522" width="5.39204" height="5.39204" transform="rotate(-180 86.2443 76.8522)" fill="white"/>
+    <rect width="5.39204" height="5.39204" transform="matrix(1 8.74228e-08 8.74228e-08 -1 53.892 76.8522)" fill="white"/>
+    <rect x="80.8522" y="76.8522" width="5.39204" height="5.39204" transform="rotate(-180 80.8522 76.8522)" fill="white"/>
+    <rect width="5.39204" height="5.39204" transform="matrix(1 8.74228e-08 8.74228e-08 -1 59.2841 76.8522)" fill="white"/>
+    <rect x="80.8522" y="82.2442" width="5.39204" height="5.39204" transform="rotate(-180 80.8522 82.2442)" fill="white"/>
+    <rect x="75.4602" y="82.2442" width="5.39204" height="5.39204" transform="rotate(-180 75.4602 82.2442)" fill="white"/>
+    <rect x="70.0681" y="82.2442" width="5.39204" height="5.39204" transform="rotate(-180 70.0681 82.2442)" fill="white"/>
+    <rect x="64.6761" y="82.2442" width="5.39204" height="5.39204" transform="rotate(-180 64.6761 82.2442)" fill="white"/>
+    <path d="M105.673 72.4038H102.36V53.4842H105.673V61.3264H114.059V53.4842H117.371V72.4038H114.059V64.3805H105.673V72.4038Z" fill="white"/>
+    <path d="M122.967 59.6182L127.134 71.4203L125.426 74.6555L119.629 59.6182H122.967ZM119.965 78.3307V75.7167H121.854C122.268 75.7167 122.631 75.6649 122.941 75.5614C123.252 75.4751 123.528 75.3026 123.77 75.0437C124.028 74.7849 124.244 74.4053 124.417 73.905L129.722 59.6182H132.984L126.72 75.2508C126.254 76.4241 125.668 77.2782 124.96 77.8131C124.253 78.348 123.373 78.6154 122.32 78.6154C121.872 78.6154 121.449 78.5896 121.052 78.5378C120.672 78.5033 120.31 78.4343 119.965 78.3307Z" fill="white"/>
+    <path d="M139.45 72.7403C138.207 72.7403 137.138 72.4642 136.24 71.9121C135.36 71.3427 134.67 70.5576 134.17 69.5568C133.687 68.556 133.445 67.3914 133.445 66.0628C133.445 64.7342 133.687 63.5609 134.17 62.5429C134.67 61.5076 135.386 60.6966 136.318 60.11C137.25 59.5233 138.354 59.23 139.631 59.23C140.528 59.23 141.348 59.4112 142.09 59.7735C142.832 60.1186 143.401 60.6103 143.798 61.2488V53.1478H146.93V72.4038H144.031L143.824 70.4109C143.444 71.1356 142.858 71.705 142.064 72.1191C141.287 72.5332 140.416 72.7403 139.45 72.7403ZM140.149 69.8415C140.891 69.8415 141.529 69.6862 142.064 69.3756C142.599 69.0478 143.013 68.5906 143.306 68.0039C143.617 67.4 143.772 66.7184 143.772 65.9592C143.772 65.1828 143.617 64.5099 143.306 63.9405C143.013 63.3538 142.599 62.8966 142.064 62.5687C141.529 62.2236 140.891 62.0511 140.149 62.0511C139.424 62.0511 138.794 62.2236 138.259 62.5687C137.724 62.8966 137.31 63.3538 137.017 63.9405C136.741 64.5271 136.603 65.2 136.603 65.9592C136.603 66.7184 136.741 67.3914 137.017 67.978C137.31 68.5647 137.724 69.0219 138.259 69.3498C138.794 69.6776 139.424 69.8415 140.149 69.8415Z" fill="white"/>
+    <path d="M158.244 59.5664V62.4911H157.079C155.923 62.4911 155.017 62.8017 154.361 63.4228C153.706 64.0267 153.378 64.9499 153.378 66.1922V72.4038H150.22V59.6441H153.197L153.455 62.284H153.145C153.317 61.4386 153.723 60.7484 154.361 60.2135C155 59.6786 155.828 59.4112 156.846 59.4112C157.07 59.4112 157.295 59.4198 157.519 59.437C157.743 59.4543 157.985 59.4974 158.244 59.5664Z" fill="white"/>
+    <path d="M163.68 72.7403C162.334 72.7403 161.264 72.3779 160.471 71.6532C159.694 70.9113 159.306 69.945 159.306 68.7545C159.306 67.5812 159.711 66.6494 160.522 65.9592C161.351 65.2518 162.524 64.8377 164.042 64.7169L167.873 64.4063V64.1216C167.873 63.535 167.761 63.0691 167.536 62.724C167.329 62.3617 167.027 62.1029 166.63 61.9476C166.234 61.775 165.768 61.6888 165.233 61.6888C164.301 61.6888 163.585 61.8786 163.085 62.2582C162.584 62.6205 162.334 63.1381 162.334 63.8111H159.642C159.642 62.8793 159.875 62.077 160.341 61.4041C160.824 60.7139 161.497 60.179 162.36 59.7994C163.24 59.4198 164.249 59.23 165.388 59.23C166.544 59.23 167.536 59.437 168.365 59.8511C169.193 60.248 169.831 60.8519 170.28 61.6629C170.728 62.4566 170.953 63.4487 170.953 64.6393V72.4038H168.183L167.95 70.5144C167.674 71.1701 167.139 71.705 166.346 72.1191C165.569 72.5332 164.681 72.7403 163.68 72.7403ZM164.689 70.3591C165.673 70.3591 166.449 70.0831 167.019 69.5309C167.605 68.9788 167.899 68.211 167.899 67.2275V66.5545L165.233 66.7616C164.249 66.8479 163.551 67.0549 163.136 67.3827C162.722 67.6933 162.515 68.1074 162.515 68.6251C162.515 69.1945 162.705 69.6258 163.085 69.9192C163.464 70.2125 163.999 70.3591 164.689 70.3591Z" fill="white"/>
+    <path d="M181.327 72.4038H174.521V53.4842H181.146C183.01 53.4842 184.649 53.8897 186.064 54.7007C187.479 55.4944 188.583 56.6073 189.377 58.0394C190.188 59.4543 190.593 61.1021 190.593 62.9828C190.593 64.8291 190.196 66.4683 189.403 67.9004C188.626 69.3152 187.539 70.4195 186.141 71.2132C184.761 72.007 183.156 72.4038 181.327 72.4038ZM177.833 55.0113V70.9027L176.255 69.3498H181.017C182.276 69.3498 183.364 69.0909 184.278 68.5733C185.192 68.0557 185.891 67.3224 186.374 66.3734C186.858 65.4244 187.099 64.2942 187.099 62.9828C187.099 61.637 186.849 60.4896 186.349 59.5406C185.848 58.5743 185.132 57.8324 184.2 57.3147C183.269 56.7971 182.147 56.5383 180.836 56.5383H176.255L177.833 55.0113Z" fill="white"/>
+    <path d="M196.992 53.4842V72.4038H193.679V53.4842H196.992ZM201.185 64.3546H195.983V61.5593H201.004C201.918 61.5593 202.617 61.335 203.1 60.8864C203.583 60.4205 203.825 59.7649 203.825 58.9194C203.825 58.1084 203.575 57.4873 203.074 57.0559C202.574 56.6246 201.849 56.4089 200.9 56.4089H195.879V53.4842H201.185C203.066 53.4842 204.541 53.9415 205.611 54.856C206.68 55.7705 207.215 57.0214 207.215 58.6088C207.215 59.7476 206.939 60.7052 206.387 61.4817C205.835 62.2409 205.015 62.793 203.928 63.1381V62.7758C205.102 63.0519 205.99 63.5695 206.594 64.3287C207.198 65.0879 207.5 66.0714 207.5 67.2792C207.5 68.349 207.258 69.2721 206.775 70.0486C206.292 70.8078 205.585 71.3944 204.653 71.8085C203.739 72.2054 202.634 72.4038 201.34 72.4038H195.879V69.4792H201.185C202.134 69.4792 202.859 69.2549 203.359 68.8062C203.859 68.3576 204.109 67.7106 204.109 66.8651C204.109 66.0714 203.851 65.4589 203.333 65.0275C202.833 64.5789 202.117 64.3546 201.185 64.3546Z" fill="white"/>
+    </svg>
+  </div>
+  <div id="tagline" style="position:fixed;bottom:80px;left:84px;z-index:10;pointer-events:none;font-family:'Satoshi',sans-serif;font-weight:400;font-size:24px;line-height:1.4;color:white;max-width:500px;">
+    Agents are the new workforce.<br>Give them context and<br>memory they need.
+  </div>
+  <a href="https://x.com/Riyvir" target="_blank" style="position:fixed;bottom:80px;right:84px;z-index:10;font-family:'Satoshi',sans-serif;font-size:13px;color:rgba(255,255,255,0.35);text-decoration:none;">Design by Neither Nor Studio</a>
   <button id="panel-toggle">&#9881;</button>
 
   <div id="panel">
@@ -1543,9 +1611,41 @@
       });
     });
 
+    // Demo button mouse-tracking glow with lerp
+    const demoBtn = $('demo-btn');
+    let btnGlowX = 0, btnGlowY = 0, btnTargetX = 0, btnTargetY = 0;
+    let btnGlowOpacity = 0, btnGlowTargetOpacity = 0;
+    let btnHovered = false;
+    demoBtn.addEventListener('mousemove', (e) => {
+      const rect = demoBtn.getBoundingClientRect();
+      btnTargetX = e.clientX - rect.left;
+      btnTargetY = e.clientY - rect.top;
+      btnGlowTargetOpacity = 1;
+      btnHovered = true;
+    });
+    demoBtn.addEventListener('mouseleave', () => {
+      btnGlowTargetOpacity = 0;
+      btnHovered = false;
+    });
+    function updateBtnGlow() {
+      requestAnimationFrame(updateBtnGlow);
+      btnGlowX += (btnTargetX - btnGlowX) * 0.08;
+      btnGlowY += (btnTargetY - btnGlowY) * 0.08;
+      btnGlowOpacity += (btnGlowTargetOpacity - btnGlowOpacity) * 0.08;
+      const a = (btnGlowOpacity * 0.35).toFixed(3);
+      if (btnGlowOpacity > 0.005) {
+        demoBtn.style.background = `radial-gradient(circle at ${btnGlowX}px ${btnGlowY}px, rgba(255,90,13,${a}) 0%, rgba(0,0,0,0.4) 60%)`;
+      } else {
+        demoBtn.style.background = 'rgba(0, 0, 0, 0.4)';
+      }
+    }
+    updateBtnGlow();
+
     // Panel show/hide
     const panel = $('panel');
     const toggle = $('panel-toggle');
+    panel.style.display = 'none';
+    toggle.style.display = 'none';
     toggle.addEventListener('click', () => {
       panel.style.display = 'block';
       toggle.style.display = 'none';
