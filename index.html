@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HydraDB Visualizer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    canvas { display: block; }
+
+    #panel {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: 280px;
+      background: rgba(18, 18, 18, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      color: #e0e0e0;
+      font-size: 12px;
+      z-index: 10;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.15) transparent;
+    }
+
+    #panel-toggle {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: 36px;
+      height: 36px;
+      background: rgba(18,18,18,0.92);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      color: #e0e0e0;
+      font-size: 16px;
+      cursor: pointer;
+      z-index: 11;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    #panel-toggle:hover { background: rgba(40,40,40,0.95); }
+
+    .section {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .section:last-child { border-bottom: none; }
+
+    .section-title {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: rgba(255,255,255,0.35);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    .section-title .chevron {
+      transition: transform 0.2s;
+      font-size: 9px;
+    }
+    .section-title.collapsed .chevron { transform: rotate(-90deg); }
+
+    .section-body.hidden { display: none; }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .control-row:last-child { margin-bottom: 0; }
+
+    .control-row label {
+      flex-shrink: 0;
+      color: rgba(255,255,255,0.6);
+      font-size: 11px;
+    }
+
+    .control-row .right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .control-row .value {
+      font-size: 11px;
+      color: rgba(255,255,255,0.4);
+      min-width: 36px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100px;
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+
+    input[type="color"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 28px;
+      height: 28px;
+      border: 2px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+    input[type="color"]::-webkit-color-swatch { border-radius: 3px; border: none; }
+
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 6px 0;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      color: #ccc;
+      font-size: 11px;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: rgba(255,255,255,0.12); }
+    .btn.active {
+      background: rgba(255,255,255,0.15);
+      border-color: rgba(255,255,255,0.25);
+      color: #fff;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.35);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0;
+    }
+    .close-btn:hover { color: rgba(255,255,255,0.7); }
+
+    .key-hint {
+      display: inline-block;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 10px;
+      color: rgba(255,255,255,0.35);
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <button id="panel-toggle">&#9881;</button>
+
+  <div id="panel">
+    <!-- CUBES -->
+    <div class="section">
+      <div class="section-title" data-section="cubes">
+        Cubes <span class="chevron">&#9660;</span>
+      </div>
+      <div class="section-body" data-body="cubes">
+        <div class="control-row">
+          <label>Color</label>
+          <div class="right">
+            <input type="color" id="cubeColor" value="#0a0a0a">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Roughness</label>
+          <div class="right">
+            <span class="value" id="roughnessVal">0.29</span>
+            <input type="range" id="roughness" min="0" max="1" step="0.01" value="0.29">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Metalness</label>
+          <div class="right">
+            <span class="value" id="metalnessVal">0.00</span>
+            <input type="range" id="metalness" min="0" max="1" step="0.01" value="0">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Size</label>
+          <div class="right">
+            <span class="value" id="cubeSizeVal">0.95</span>
+            <input type="range" id="cubeSize" min="0.2" max="1.5" step="0.01" value="0.95">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Gap</label>
+          <div class="right">
+            <span class="value" id="gapVal">0.00</span>
+            <input type="range" id="gap" min="0" max="0.5" step="0.01" value="0">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Corner Radius</label>
+          <div class="right">
+            <span class="value" id="bevelVal">0.05</span>
+            <input type="range" id="bevel" min="0" max="0.2" step="0.005" value="0.05">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Z-DEPTH -->
+    <div class="section">
+      <div class="section-title" data-section="depth">
+        Z-Depth <span class="chevron">&#9660;</span>
+      </div>
+      <div class="section-body" data-body="depth">
+        <div class="control-row">
+          <label>Spread</label>
+          <div class="right">
+            <span class="value" id="zSpreadVal">0.0</span>
+            <input type="range" id="zSpread" min="0" max="20" step="0.1" value="0">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="reshuffleZ">Reshuffle</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANIMATION -->
+    <div class="section">
+      <div class="section-title" data-section="anim">
+        Animation <span class="chevron">&#9660;</span>
+      </div>
+      <div class="section-body" data-body="anim">
+        <div class="control-row">
+          <label>Float Speed</label>
+          <div class="right">
+            <span class="value" id="floatSpeedVal">0.0</span>
+            <input type="range" id="floatSpeed" min="0" max="3" step="0.05" value="0">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Float Amplitude</label>
+          <div class="right">
+            <span class="value" id="floatAmpVal">0.0</span>
+            <input type="range" id="floatAmp" min="0" max="3" step="0.05" value="0">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Auto-Rotate</label>
+          <div class="right">
+            <button class="btn" id="autoRotateBtn" style="flex:none;width:44px;">Off</button>
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Rotate Speed</label>
+          <div class="right">
+            <span class="value" id="rotateSpeedVal">1.2</span>
+            <input type="range" id="rotateSpeed" min="0.1" max="5" step="0.1" value="1.2">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MOUSE LIGHT -->
+    <div class="section">
+      <div class="section-title" data-section="mouselight">
+        Mouse Light <span class="chevron">&#9660;</span>
+      </div>
+      <div class="section-body" data-body="mouselight">
+        <div class="control-row">
+          <label>Falloff</label>
+          <div class="right">
+            <span class="value" id="mouseFalloffVal">1.2</span>
+            <input type="range" id="mouseFalloff" min="0.5" max="20" step="0.1" value="1.2">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER PULSE -->
+    <div class="section">
+      <div class="section-title" data-section="centerpulse">
+        Center Pulse <span class="chevron">&#9660;</span>
+      </div>
+      <div class="section-body" data-body="centerpulse">
+        <div class="control-row">
+          <label>Speed</label>
+          <div class="right">
+            <span class="value" id="pulseSpeedVal">2.0</span>
+            <input type="range" id="pulseSpeed" min="0.2" max="8" step="0.1" value="2.0">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Transition</label>
+          <div class="right">
+            <span class="value" id="pulseSharpnessVal">1.5</span>
+            <input type="range" id="pulseSharpness" min="1" max="10" step="0.1" value="1.5">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Hold</label>
+          <div class="right">
+            <span class="value" id="pulseHoldVal">0.25</span>
+            <input type="range" id="pulseHold" min="0" max="2" step="0.05" value="0.25">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIGHTING -->
+    <div class="section">
+      <div class="section-title" data-section="light">
+        Lighting <span class="chevron">&#9660;</span>
+      </div>
+      <div class="section-body" data-body="light">
+        <div class="control-row">
+          <label>Ambient</label>
+          <div class="right">
+            <span class="value" id="ambientVal">0.61</span>
+            <input type="range" id="ambient" min="0" max="2" step="0.01" value="0.61">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Key Light</label>
+          <div class="right">
+            <span class="value" id="keyLightVal">0.00</span>
+            <input type="range" id="keyLight" min="0" max="3" step="0.01" value="0">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Key Color</label>
+          <div class="right">
+            <input type="color" id="keyColor" value="#ffffff">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Back Light</label>
+          <div class="right">
+            <span class="value" id="backLightVal">0.23</span>
+            <input type="range" id="backLight" min="0" max="2" step="0.01" value="0.23">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Back Color</label>
+          <div class="right">
+            <input type="color" id="backColor" value="#ffffff">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GRID -->
+    <div class="section">
+      <div class="section-title" data-section="grid">
+        Grid <span class="chevron">&#9660;</span>
+      </div>
+      <div class="section-body" data-body="grid">
+        <div class="control-row">
+          <label>Grid Spacing</label>
+          <div class="right">
+            <span class="value" id="gridSpacingVal">1.80</span>
+            <input type="range" id="gridSpacing" min="0.5" max="5" step="0.01" value="1.8">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Line Width</label>
+          <div class="right">
+            <span class="value" id="gridLineWidthVal">0.03</span>
+            <input type="range" id="gridLineWidth" min="0.005" max="0.1" step="0.001" value="0.03">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Line Brightness</label>
+          <div class="right">
+            <span class="value" id="gridLineBrightnessVal">0.12</span>
+            <input type="range" id="gridLineBrightness" min="0" max="0.5" step="0.01" value="0.12">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Glow Color</label>
+          <div class="right">
+            <input type="color" id="gridGlowColor" value="#ff5a0d">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Glow Intensity</label>
+          <div class="right">
+            <span class="value" id="gridGlowIntensityVal">0.50</span>
+            <input type="range" id="gridGlowIntensity" min="0" max="2" step="0.01" value="0.5">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Glow Speed</label>
+          <div class="right">
+            <span class="value" id="gridGlowSpeedVal">1.00</span>
+            <input type="range" id="gridGlowSpeed" min="0" max="5" step="0.01" value="1.0">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Glow Sharpness</label>
+          <div class="right">
+            <span class="value" id="gridGlowSharpnessVal">12.0</span>
+            <input type="range" id="gridGlowSharpness" min="1" max="200" step="0.5" value="12">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Glow Density</label>
+          <div class="right">
+            <span class="value" id="gridGlowDensityVal">0.15</span>
+            <input type="range" id="gridGlowDensity" min="0.02" max="1" step="0.01" value="0.15">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE -->
+    <div class="section">
+      <div class="section-title" data-section="scene">
+        Scene <span class="chevron">&#9660;</span>
+      </div>
+      <div class="section-body" data-body="scene">
+        <div class="control-row">
+          <label>Background</label>
+          <div class="right">
+            <input type="color" id="bgColor" value="#e8e8e8">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Fog Density</label>
+          <div class="right">
+            <span class="value" id="fogVal">0.000</span>
+            <input type="range" id="fog" min="0" max="0.08" step="0.001" value="0">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>FOV</label>
+          <div class="right">
+            <span class="value" id="fovVal">48</span>
+            <input type="range" id="fov" min="20" max="120" step="1" value="48">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Zoom</label>
+          <div class="right">
+            <span class="value" id="zoomVal">25</span>
+            <input type="range" id="zoom" min="8" max="50" step="0.5" value="25">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Bloom</label>
+          <div class="right">
+            <span class="value" id="bloomStrengthVal">1.07</span>
+            <input type="range" id="bloomStrength" min="0" max="3" step="0.01" value="1.07">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Bloom Radius</label>
+          <div class="right">
+            <span class="value" id="bloomRadiusVal">0.40</span>
+            <input type="range" id="bloomRadius" min="0" max="1" step="0.01" value="0.4">
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Bloom Threshold</label>
+          <div class="right">
+            <span class="value" id="bloomThresholdVal">0.20</span>
+            <input type="range" id="bloomThreshold" min="0" max="2" step="0.01" value="0.2">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="frontViewBtn">Front View <span class="key-hint">F</span></button>
+          <button class="btn" id="resetBtn">Reset All</button>
+        </div>
+        <div class="btn-row" style="margin-top:2px;">
+          <button class="btn" id="saveDefaultsBtn">Save Defaults</button>
+          <button class="btn" id="clearDefaultsBtn">Clear Saved</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+    // --- Shape definition ---
+    const shape = [
+      [0,0,0,1,1,1,1,1,0,0,0],
+      [0,0,1,1,0,0,0,1,1,0,0],
+      [0,1,1,0,0,0,0,0,1,1,0],
+      [1,1,0,0,0,0,0,0,0,1,1],
+      [1,0,0,0,0,1,0,0,0,0,1],
+      [1,1,0,0,0,0,0,0,0,1,1],
+      [0,1,1,0,0,0,0,0,1,1,0],
+      [0,0,1,1,0,0,0,1,1,0,0],
+      [0,0,0,1,1,1,1,1,0,0,0],
+    ];
+    const gridCols = shape[0].length;
+    const gridRows = shape.length;
+
+    // --- Params (mutable) ---
+    const defaultParams = {
+      cubeColor: '#0a0a0a',
+      roughness: 0.29,
+      metalness: 0,
+      cubeSize: 0.95,
+      gap: 0,
+      bevel: 0.05,
+      zSpread: 0,
+      floatSpeed: 0,
+      floatAmp: 0,
+      autoRotate: false,
+      rotateSpeed: 1.2,
+      mouseFalloff: 1.2,
+      pulseSpeed: 2.0,
+      pulseSharpness: 1.5,
+      pulseHold: 0.25,
+      ambient: 0.61,
+      keyLight: 0,
+      keyColor: '#ffffff',
+      backLight: 0.23,
+      backColor: '#ffffff',
+      bgColor: '#e8e8e8',
+      fog: 0,
+      fov: 48,
+      zoom: 25,
+      bloomStrength: 1.07,
+      bloomRadius: 0.4,
+      bloomThreshold: 0.2,
+      gridSpacing: 1.8,
+      gridLineWidth: 0.03,
+      gridLineBrightness: 0.12,
+      gridGlowColor: '#ff5a0d',
+      gridGlowIntensity: 0.5,
+      gridGlowSpeed: 1.0,
+      gridGlowSharpness: 12.0,
+      gridGlowDensity: 0.15,
+    };
+
+    // Load saved defaults from localStorage if present
+    const saved = localStorage.getItem('hydraDefaults');
+    const params = saved ? { ...defaultParams, ...JSON.parse(saved) } : { ...defaultParams };
+
+    // --- Scene setup ---
+    const scene = new THREE.Scene();
+
+    scene.background = null; // grid plane handles background
+    scene.fog = new THREE.FogExp2(new THREE.Color(params.bgColor), params.fog);
+
+    const camera = new THREE.PerspectiveCamera(params.fov, window.innerWidth / window.innerHeight, 0.1, 200);
+    camera.position.set(0, 0, params.zoom);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    renderer.setClearColor(new THREE.Color(params.bgColor), 1);
+    document.body.appendChild(renderer.domElement);
+
+    // --- Render target for background pass ---
+    const pxr = Math.min(window.devicePixelRatio, 2);
+    let bgTarget = new THREE.WebGLRenderTarget(
+      window.innerWidth * pxr, window.innerHeight * pxr,
+      { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat }
+    );
+
+    // --- Mouse tracking ---
+    const mouse = new THREE.Vector2(9999, 9999);
+    const raycaster = new THREE.Raycaster();
+    const mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    const mouseWorld = new THREE.Vector3(9999, 9999, 0);
+
+    window.addEventListener('mousemove', (e) => {
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    });
+    window.addEventListener('mouseleave', () => {
+      mouse.x = 9999;
+      mouse.y = 9999;
+    });
+
+    // --- Bloom post-processing ---
+    const composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      params.bloomStrength,
+      params.bloomRadius,
+      params.bloomThreshold
+    );
+    composer.addPass(bloomPass);
+
+    const orbitControls = new OrbitControls(camera, renderer.domElement);
+    orbitControls.enableDamping = true;
+    orbitControls.dampingFactor = 0.05;
+    orbitControls.enableRotate = false;
+    orbitControls.enableZoom = false;
+    orbitControls.enablePan = false;
+    orbitControls.autoRotate = false;
+    orbitControls.autoRotateSpeed = params.rotateSpeed;
+
+    // --- Lighting ---
+    const ambientLight = new THREE.AmbientLight(0xffffff, params.ambient);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(new THREE.Color(params.keyColor), params.keyLight);
+    dirLight.position.set(10, 15, 20);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+
+    const backLight = new THREE.DirectionalLight(new THREE.Color(params.backColor), params.backLight);
+    backLight.position.set(-10, -5, -15);
+    scene.add(backLight);
+
+    // --- Grid Background ---
+    const gridBgUniforms = {
+      time: { value: 0 },
+      bgColor: { value: new THREE.Color(params.bgColor) },
+      resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+      spacing: { value: 1.8 },
+      lineWidth: { value: 0.03 },
+      lineBrightness: { value: 0.12 },
+      glowColor: { value: new THREE.Color(0xff5a0d) },
+      glowIntensity: { value: 0.5 },
+      glowSpeed: { value: 1.0 },
+      glowSharpness: { value: 12.0 },
+      glowDensity: { value: 0.15 },
+    };
+
+    const gridBgMat = new THREE.ShaderMaterial({
+      uniforms: gridBgUniforms,
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vWorldPos;
+        void main() {
+          vUv = uv;
+          vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float time;
+        uniform vec3 bgColor;
+        uniform vec2 resolution;
+        uniform float spacing;
+        uniform float lineWidth;
+        uniform float lineBrightness;
+        uniform vec3 glowColor;
+        uniform float glowIntensity;
+        uniform float glowSpeed;
+        uniform float glowSharpness;
+        uniform float glowDensity;
+        varying vec2 vUv;
+        varying vec3 vWorldPos;
+
+        void main() {
+          float x = vWorldPos.x * spacing;
+          float y = vWorldPos.y * spacing;
+
+          // Uniform grid — distance to nearest line
+          float distX = abs(fract(x) - 0.5);
+          float distY = abs(fract(y) - 0.5);
+
+          float lineX = 1.0 - smoothstep(0.0, lineWidth, distX);
+          float lineY = 1.0 - smoothstep(0.0, lineWidth, distY);
+          float grid = max(lineX, lineY);
+
+          // Cell index for per-line phase offset
+          float cellX = floor(x + 0.5);
+          float cellY = floor(y + 0.5);
+
+          float t = time * glowSpeed;
+          float sharp = glowSharpness;
+          float freq = glowDensity;
+
+          // Glow on horizontal lines: travels along x
+          // freq controls spatial frequency — lower = fewer, more spread out pulses
+          float hTravel = sin(x * freq + t * 2.0 + cellY * 1.7) * 0.5 + 0.5;
+          hTravel = pow(hTravel, sharp);
+          float hGlow = lineY * hTravel;
+
+          float hTravel2 = sin(-x * freq * 0.7 + t * 1.3 + cellY * 2.3 + 4.0) * 0.5 + 0.5;
+          hTravel2 = pow(hTravel2, sharp + 2.0);
+          float hGlow2 = lineY * hTravel2;
+
+          // Glow on vertical lines: travels along y
+          float vTravel = sin(y * freq * 0.9 + t * 1.6 + cellX * 2.1) * 0.5 + 0.5;
+          vTravel = pow(vTravel, sharp);
+          float vGlow = lineX * vTravel;
+
+          float vTravel2 = sin(-y * freq * 0.8 + t * 1.1 + cellX * 1.5 + 3.0) * 0.5 + 0.5;
+          vTravel2 = pow(vTravel2, sharp + 2.0);
+          float vGlow2 = lineX * vTravel2;
+
+          float totalGlow = clamp(hGlow + hGlow2 + vGlow + vGlow2, 0.0, 1.0);
+
+          // Compose
+          vec3 color = bgColor;
+          color += vec3(lineBrightness) * grid;
+          color += glowColor * totalGlow * glowIntensity;
+
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      fog: false,
+    });
+
+    const gridPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(200, 200),
+      gridBgMat
+    );
+    gridPlane.position.z = -20;
+    gridPlane.renderOrder = -1;
+    scene.add(gridPlane);
+
+    // --- Cubes ---
+    let cubes = [];
+    let cubeGroup = new THREE.Group();
+    scene.add(cubeGroup);
+
+    // Store random seeds per cell so reshuffle is explicit
+    const cellSeeds = [];
+    for (let r = 0; r < gridRows; r++) {
+      cellSeeds[r] = [];
+      for (let c = 0; c < gridCols; c++) {
+        cellSeeds[r][c] = {
+          z: (Math.random() - 0.5),
+          phase: Math.random() * Math.PI * 2,
+          speed: 0.3 + Math.random() * 0.4,
+          amp: 0.3 + Math.random() * 0.5,
+        };
+      }
+    }
+
+    // --- Liquid Glass Shader ---
+    // Shared uniforms (same across all cubes)
+    const sharedUniforms = {
+      tBackground: { value: null },
+      resolution: { value: new THREE.Vector2(window.innerWidth * pxr, window.innerHeight * pxr) },
+      ior: { value: 1.18 },
+      chromaticAberration: { value: 0.035 },
+      lightDir: { value: new THREE.Vector3(0.4, 0.7, 1.0).normalize() },
+      backLightDir: { value: new THREE.Vector3(-0.4, -0.2, -0.6).normalize() },
+      baseColor: { value: new THREE.Color(params.cubeColor) },
+      fresnelPower: { value: 3.5 },
+      ambientIntensity: { value: params.ambient },
+      keyLightIntensity: { value: params.keyLight },
+      keyLightColor: { value: new THREE.Color(params.keyColor) },
+      backLightIntensity: { value: params.backLight },
+      backLightColor: { value: new THREE.Color(params.backColor) },
+      specPower: { value: 80.0 },
+      blurRadius: { value: 3.5 },
+      glassOpacity: { value: 0.88 },
+      neonColor: { value: new THREE.Color(0xff5500) },
+      time: { value: 0 },
+    };
+
+    const liquidGlassVert = `
+      varying vec3 vNormal;
+      varying vec3 vViewDir;
+      varying vec4 vClipPos;
+      varying vec3 vWorldPos;
+      varying vec3 vWorldNormal;
+
+      void main() {
+        vNormal = normalize(normalMatrix * normal);
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vWorldPos = worldPos.xyz;
+        vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+        vViewDir = normalize(cameraPosition - worldPos.xyz);
+        vClipPos = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        gl_Position = vClipPos;
+      }
+    `;
+
+    const liquidGlassFrag = `
+      uniform sampler2D tBackground;
+      uniform vec2 resolution;
+      uniform float ior;
+      uniform float chromaticAberration;
+      uniform vec3 lightDir;
+      uniform vec3 backLightDir;
+      uniform vec3 baseColor;
+      uniform float fresnelPower;
+      uniform float ambientIntensity;
+      uniform float keyLightIntensity;
+      uniform vec3 keyLightColor;
+      uniform float backLightIntensity;
+      uniform vec3 backLightColor;
+      uniform float specPower;
+      uniform float blurRadius;
+      uniform float glassOpacity;
+      uniform vec3 neonColor;
+      uniform float neonMix;
+      uniform float time;
+
+      varying vec3 vNormal;
+      varying vec3 vViewDir;
+      varying vec4 vClipPos;
+      varying vec3 vWorldPos;
+      varying vec3 vWorldNormal;
+
+      // Convex squircle surface profile (Apple's preferred curve)
+      float squircleProfile(float d) {
+        float x = clamp(d, 0.0, 1.0);
+        float t = 1.0 - x;
+        return pow(max(1.0 - t * t * t * t, 0.0), 0.25);
+      }
+
+      void main() {
+        vec2 screenUV = (vClipPos.xy / vClipPos.w) * 0.5 + 0.5;
+        float ease = neonMix;
+
+        // --- Refraction displacement (reduced when neon) ---
+        vec3 refracted = refract(-vViewDir, vNormal, 1.0 / ior);
+        float edgeFactor = 1.0 - abs(dot(vNormal, vViewDir));
+        float profile = squircleProfile(edgeFactor);
+        vec2 offset = refracted.xy * 0.06 * profile * (1.0 - ease);
+
+        // --- Chromatic aberration (RGB channel separation at edges) ---
+        float caScale = chromaticAberration * profile;
+        float r = texture2D(tBackground, screenUV + offset * (1.0 + caScale)).r;
+        float g = texture2D(tBackground, screenUV + offset).g;
+        float b = texture2D(tBackground, screenUV + offset * (1.0 - caScale)).b;
+        vec3 refractedColor = vec3(r, g, b);
+
+        // --- Multi-tap blur ---
+        vec3 blurred = vec3(0.0);
+        float totalW = 0.0;
+        vec2 texelSize = blurRadius / resolution;
+        for (int x = -2; x <= 2; x++) {
+          for (int y = -2; y <= 2; y++) {
+            float w = 1.0 / (1.0 + float(x * x + y * y) * 0.5);
+            vec2 tap = screenUV + offset + vec2(float(x), float(y)) * texelSize;
+            blurred += texture2D(tBackground, tap).rgb * w;
+            totalW += w;
+          }
+        }
+        blurred /= totalW;
+
+        // Mix sharp refracted with blurred (frosted glass)
+        vec3 glass = mix(blurred, refractedColor, 0.25);
+
+        // --- Fresnel rim light ---
+        float fresnel = pow(1.0 - max(dot(vNormal, vViewDir), 0.0), fresnelPower);
+
+
+
+        // --- Key light specular highlight ---
+        vec3 halfVec = normalize(vViewDir + lightDir);
+        float spec = pow(max(dot(vNormal, halfVec), 0.0), specPower);
+
+        // --- Key light rim specular ---
+        float rimSpec = fresnel * (dot(vWorldNormal, lightDir) * 0.5 + 0.5);
+
+        // --- Back light contribution ---
+        vec3 backHalf = normalize(vViewDir + backLightDir);
+        float backSpec = pow(max(dot(vNormal, backHalf), 0.0), specPower * 0.5);
+        float backRim = fresnel * (dot(vWorldNormal, backLightDir) * 0.5 + 0.5);
+
+        // --- Subtle caustic shimmer ---
+        float caustic = sin(vWorldPos.x * 8.0 + time * 0.7) *
+                        sin(vWorldPos.y * 8.0 - time * 0.5) * 0.03 * fresnel;
+
+        // --- Composite glass ---
+        vec3 color = glass;
+        // Ambient
+        color += baseColor * 0.04 * ambientIntensity;
+        color += vec3(1.0) * fresnel * ambientIntensity * 0.15;
+        // Key light
+        color += keyLightColor * spec * keyLightIntensity * 0.3 * (1.0 - ease * 0.7);
+        color += keyLightColor * rimSpec * keyLightIntensity * 0.12 * (1.0 - ease);
+        // Back light
+        color += backLightColor * backSpec * backLightIntensity * 0.25 * (1.0 - ease * 0.7);
+        color += backLightColor * backRim * backLightIntensity * 0.1 * (1.0 - ease);
+        // Caustic
+        color += vec3(1.0) * caustic * (1.0 - ease);
+
+        // --- Per-cube neon glow (uniform across entire cube face) ---
+        vec3 neonGlow = neonColor * 3.0;
+        color = mix(color, neonGlow, ease * 0.65);
+        color += neonColor * ease * ease * 2.0;
+
+        // Neon rim: hot orange fresnel on glowing cubes
+        color += neonColor * 1.5 * fresnel * ease;
+
+        // Glass alpha: mostly opaque with brighter edges, fully opaque when neon
+        float alpha = glassOpacity + fresnel * 0.12 + ease * (1.0 - glassOpacity);
+
+        gl_FragColor = vec4(color, alpha);
+      }
+    `;
+
+    function createCubeMaterial() {
+      // Each cube gets its own material so neonMix can differ per cube
+      // Share all uniforms by reference except neonMix which is per-cube
+      const uniforms = {};
+      for (const key in sharedUniforms) {
+        uniforms[key] = sharedUniforms[key];
+      }
+      uniforms.neonMix = { value: 0.0 };
+
+      return new THREE.ShaderMaterial({
+        uniforms,
+        vertexShader: liquidGlassVert,
+        fragmentShader: liquidGlassFrag,
+        transparent: true,
+        depthWrite: true,
+        side: THREE.FrontSide,
+      });
+    }
+
+    function rebuildCubes() {
+      for (const c of cubes) {
+        cubeGroup.remove(c);
+        c.geometry.dispose();
+        c.material.dispose();
+      }
+      cubes = [];
+
+      const size = params.cubeSize;
+      const step = size + params.gap;
+      const offsetX = -(gridCols - 1) * step / 2;
+      const offsetY = (gridRows - 1) * step / 2;
+
+      let geo;
+      if (params.bevel > 0) {
+        geo = new RoundedBoxGeometry(size, size, size, 4, params.bevel);
+      } else {
+        geo = new THREE.BoxGeometry(size, size, size);
+      }
+
+      for (let row = 0; row < gridRows; row++) {
+        for (let col = 0; col < gridCols; col++) {
+          if (!shape[row][col]) continue;
+
+          const seed = cellSeeds[row][col];
+          const zDepth = seed.z * params.zSpread;
+
+          const mat = createCubeMaterial();
+          const cube = new THREE.Mesh(geo, mat);
+          cube.position.set(
+            offsetX + col * step,
+            offsetY - row * step,
+            zDepth
+          );
+
+          // Center cube of the logo (row 4, col 5)
+          const isCenter = (row === 4 && col === 5);
+
+          cube.userData = {
+            row, col,
+            baseX: offsetX + col * step,
+            baseY: offsetY - row * step,
+            baseZ: zDepth,
+            phase: seed.phase,
+            speed: seed.speed,
+            amplitude: seed.amp,
+            currentNeonMix: 0,
+            isCenter,
+          };
+
+          cubeGroup.add(cube);
+          cubes.push(cube);
+        }
+      }
+    }
+
+    rebuildCubes();
+
+    // --- Lightweight updates (no rebuild) ---
+    function updateMaterials() {
+      sharedUniforms.baseColor.value.set(params.cubeColor);
+    }
+
+    function updatePositions() {
+      const size = params.cubeSize;
+      const step = size + params.gap;
+      const offsetX = -(gridCols - 1) * step / 2;
+      const offsetY = (gridRows - 1) * step / 2;
+
+      for (const cube of cubes) {
+        const { row, col } = cube.userData;
+        const seed = cellSeeds[row][col];
+        cube.userData.baseX = offsetX + col * step;
+        cube.userData.baseY = offsetY - row * step;
+        cube.userData.baseZ = seed.z * params.zSpread;
+        cube.position.x = cube.userData.baseX;
+        cube.position.y = cube.userData.baseY;
+      }
+    }
+
+    function reshuffleZ() {
+      for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+          cellSeeds[r][c].z = (Math.random() - 0.5);
+          cellSeeds[r][c].phase = Math.random() * Math.PI * 2;
+          cellSeeds[r][c].speed = 0.3 + Math.random() * 0.4;
+          cellSeeds[r][c].amp = 0.3 + Math.random() * 0.5;
+        }
+      }
+      for (const cube of cubes) {
+        const { row, col } = cube.userData;
+        const seed = cellSeeds[row][col];
+        cube.userData.baseZ = seed.z * params.zSpread;
+        cube.userData.phase = seed.phase;
+        cube.userData.speed = seed.speed;
+        cube.userData.amplitude = seed.amp;
+      }
+    }
+
+    // --- Animation ---
+    const clock = new THREE.Clock();
+
+    const NEON_LERP_SPEED = 8.0; // how fast cubes transition between states
+    let lastTime = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+      const dt = t - lastTime;
+      lastTime = t;
+
+      // Project mouse into world space on the z=0 plane
+      raycaster.setFromCamera(mouse, camera);
+      raycaster.ray.intersectPlane(mousePlane, mouseWorld);
+
+      // Update shared uniforms
+      sharedUniforms.time.value = t;
+      gridBgUniforms.time.value = t;
+
+      // Raycast to find the single hovered cube
+      const intersects = raycaster.intersectObjects(cubes, false);
+      const hoveredCube = intersects.length > 0 ? intersects[0].object : null;
+
+      // Center cube pulse: smooth sine between glass and neon
+      const centerPulse = Math.min(1, Math.max(0, Math.sin(t * params.pulseSpeed) * params.pulseSharpness - params.pulseHold));
+
+      // Update cube positions and per-cube neonMix
+      for (const cube of cubes) {
+        const { baseZ, phase, speed, amplitude, isCenter } = cube.userData;
+        cube.position.z = baseZ + Math.sin(t * speed * params.floatSpeed + phase) * amplitude * params.floatAmp;
+
+        let targetMix;
+        if (cube === hoveredCube) {
+          targetMix = 1.0;
+        } else if (isCenter) {
+          targetMix = centerPulse;
+        } else {
+          targetMix = 0.0;
+        }
+
+        // Smooth lerp toward target so cubes don't pop
+        const current = cube.userData.currentNeonMix || 0;
+        const lerpSpeed = isCenter ? 16.0 : NEON_LERP_SPEED;
+        const lerped = current + (targetMix - current) * Math.min(1, dt * lerpSpeed);
+        cube.userData.currentNeonMix = lerped;
+        cube.material.uniforms.neonMix.value = lerped;
+      }
+
+      orbitControls.update();
+
+      // Pass 1: render scene without cubes to background texture
+      cubeGroup.visible = false;
+      renderer.setRenderTarget(bgTarget);
+      renderer.render(scene, camera);
+      renderer.setRenderTarget(null);
+      cubeGroup.visible = true;
+
+      // Feed background texture to glass shaders
+      sharedUniforms.tBackground.value = bgTarget.texture;
+
+      // Pass 2: render full scene with bloom post-processing
+      composer.render();
+    }
+    animate();
+
+    // --- Resize ---
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      composer.setSize(window.innerWidth, window.innerHeight);
+      bloomPass.resolution.set(window.innerWidth, window.innerHeight);
+      const pr = Math.min(window.devicePixelRatio, 2);
+      bgTarget.setSize(window.innerWidth * pr, window.innerHeight * pr);
+      sharedUniforms.resolution.value.set(window.innerWidth * pr, window.innerHeight * pr);
+    });
+
+    // --- UI Bindings ---
+    const $ = (id) => document.getElementById(id);
+
+    // Helper: bind a range slider to a param
+    function bindRange(id, paramKey, onChange, format) {
+      const el = $(id);
+      const valEl = $(id + 'Val');
+      const fmt = format || ((v) => parseFloat(v).toFixed(2));
+      el.addEventListener('input', () => {
+        params[paramKey] = parseFloat(el.value);
+        if (valEl) valEl.textContent = fmt(el.value);
+        if (onChange) onChange();
+      });
+    }
+
+    // Cubes
+    $('cubeColor').addEventListener('input', (e) => {
+      params.cubeColor = e.target.value;
+      updateMaterials();
+    });
+    bindRange('roughness', 'roughness', updateMaterials);
+    bindRange('metalness', 'metalness', updateMaterials);
+    bindRange('cubeSize', 'cubeSize', () => rebuildCubes());
+    bindRange('gap', 'gap', () => rebuildCubes());
+    bindRange('bevel', 'bevel', () => rebuildCubes());
+
+    // Z-Depth
+    bindRange('zSpread', 'zSpread', updatePositions, (v) => parseFloat(v).toFixed(1));
+    $('reshuffleZ').addEventListener('click', reshuffleZ);
+
+    // Mouse Light
+    bindRange('mouseFalloff', 'mouseFalloff', null, (v) => parseFloat(v).toFixed(1));
+    bindRange('pulseSpeed', 'pulseSpeed');
+    bindRange('pulseSharpness', 'pulseSharpness');
+    bindRange('pulseHold', 'pulseHold');
+
+    // Animation
+    bindRange('floatSpeed', 'floatSpeed', null, (v) => parseFloat(v).toFixed(1));
+    bindRange('floatAmp', 'floatAmp', null, (v) => parseFloat(v).toFixed(1));
+    bindRange('rotateSpeed', 'rotateSpeed', () => {
+      orbitControls.autoRotateSpeed = params.rotateSpeed;
+    }, (v) => parseFloat(v).toFixed(1));
+
+    $('autoRotateBtn').addEventListener('click', () => {
+      params.autoRotate = !params.autoRotate;
+      orbitControls.autoRotate = params.autoRotate;
+      $('autoRotateBtn').textContent = params.autoRotate ? 'On' : 'Off';
+      $('autoRotateBtn').classList.toggle('active', params.autoRotate);
+    });
+
+    // Lighting
+    bindRange('ambient', 'ambient', () => {
+      ambientLight.intensity = params.ambient;
+      sharedUniforms.ambientIntensity.value = params.ambient;
+    });
+    bindRange('keyLight', 'keyLight', () => {
+      dirLight.intensity = params.keyLight;
+      sharedUniforms.keyLightIntensity.value = params.keyLight;
+    });
+    $('keyColor').addEventListener('input', (e) => {
+      params.keyColor = e.target.value;
+      dirLight.color.set(params.keyColor);
+      sharedUniforms.keyLightColor.value.set(params.keyColor);
+    });
+    bindRange('backLight', 'backLight', () => {
+      backLight.intensity = params.backLight;
+      sharedUniforms.backLightIntensity.value = params.backLight;
+    });
+    $('backColor').addEventListener('input', (e) => {
+      params.backColor = e.target.value;
+      backLight.color.set(params.backColor);
+      sharedUniforms.backLightColor.value.set(params.backColor);
+    });
+
+    // Grid
+    bindRange('gridSpacing', 'gridSpacing', () => { gridBgUniforms.spacing.value = params.gridSpacing; });
+    bindRange('gridLineWidth', 'gridLineWidth', () => { gridBgUniforms.lineWidth.value = params.gridLineWidth; }, (v) => parseFloat(v).toFixed(3));
+    bindRange('gridLineBrightness', 'gridLineBrightness', () => { gridBgUniforms.lineBrightness.value = params.gridLineBrightness; });
+    $('gridGlowColor').addEventListener('input', (e) => {
+      params.gridGlowColor = e.target.value;
+      gridBgUniforms.glowColor.value.set(params.gridGlowColor);
+    });
+    bindRange('gridGlowIntensity', 'gridGlowIntensity', () => { gridBgUniforms.glowIntensity.value = params.gridGlowIntensity; });
+    bindRange('gridGlowSpeed', 'gridGlowSpeed', () => { gridBgUniforms.glowSpeed.value = params.gridGlowSpeed; });
+    bindRange('gridGlowSharpness', 'gridGlowSharpness', () => { gridBgUniforms.glowSharpness.value = params.gridGlowSharpness; }, (v) => parseFloat(v).toFixed(1));
+    bindRange('gridGlowDensity', 'gridGlowDensity', () => { gridBgUniforms.glowDensity.value = params.gridGlowDensity; });
+
+    // Scene
+    $('bgColor').addEventListener('input', (e) => {
+      params.bgColor = e.target.value;
+      gridBgUniforms.bgColor.value.set(params.bgColor);
+      scene.fog.color.set(params.bgColor);
+    });
+    bindRange('fog', 'fog', () => { scene.fog.density = params.fog; }, (v) => parseFloat(v).toFixed(3));
+    bindRange('fov', 'fov', () => {
+      camera.fov = params.fov;
+      camera.updateProjectionMatrix();
+    }, (v) => parseInt(v));
+    bindRange('zoom', 'zoom', () => {
+      camera.position.z = params.zoom;
+    });
+    bindRange('bloomStrength', 'bloomStrength', () => {
+      bloomPass.strength = params.bloomStrength;
+      bloomPass.enabled = params.bloomStrength > 0;
+    });
+    bindRange('bloomRadius', 'bloomRadius', () => { bloomPass.radius = params.bloomRadius; });
+    bindRange('bloomThreshold', 'bloomThreshold', () => { bloomPass.threshold = params.bloomThreshold; });
+
+    // Front view
+    function goFrontView() {
+      orbitControls.autoRotate = false;
+      params.autoRotate = false;
+      $('autoRotateBtn').textContent = 'Off';
+      $('autoRotateBtn').classList.remove('active');
+      camera.position.set(0, 0, params.zoom);
+      camera.lookAt(0, 0, 0);
+      orbitControls.target.set(0, 0, 0);
+    }
+    $('frontViewBtn').addEventListener('click', goFrontView);
+
+    // Reset
+    $('resetBtn').addEventListener('click', () => {
+      location.reload();
+    });
+
+    // Save / Clear defaults
+    $('saveDefaultsBtn').addEventListener('click', () => {
+      localStorage.setItem('hydraDefaults', JSON.stringify(params));
+      $('saveDefaultsBtn').textContent = 'Saved!';
+      setTimeout(() => { $('saveDefaultsBtn').textContent = 'Save Defaults'; }, 1200);
+    });
+    $('clearDefaultsBtn').addEventListener('click', () => {
+      localStorage.removeItem('hydraDefaults');
+      $('clearDefaultsBtn').textContent = 'Cleared!';
+      setTimeout(() => { $('clearDefaultsBtn').textContent = 'Clear Saved'; }, 1200);
+    });
+
+    // --- Init UI from params (applies saved defaults) ---
+    function syncUIFromParams() {
+      // Range sliders
+      const rangeMap = {
+        roughness: (v) => v.toFixed(2),
+        metalness: (v) => v.toFixed(2),
+        cubeSize: (v) => v.toFixed(2),
+        gap: (v) => v.toFixed(2),
+        bevel: (v) => v.toFixed(2),
+        zSpread: (v) => v.toFixed(1),
+        floatSpeed: (v) => v.toFixed(1),
+        floatAmp: (v) => v.toFixed(1),
+        rotateSpeed: (v) => v.toFixed(1),
+        mouseFalloff: (v) => v.toFixed(1),
+        ambient: (v) => v.toFixed(2),
+        keyLight: (v) => v.toFixed(2),
+        backLight: (v) => v.toFixed(2),
+        fog: (v) => v.toFixed(3),
+        fov: (v) => String(Math.round(v)),
+        bloomStrength: (v) => v.toFixed(2),
+        bloomRadius: (v) => v.toFixed(2),
+        bloomThreshold: (v) => v.toFixed(2),
+        gridSpacing: (v) => v.toFixed(2),
+        gridLineWidth: (v) => v.toFixed(3),
+        gridLineBrightness: (v) => v.toFixed(2),
+        gridGlowIntensity: (v) => v.toFixed(2),
+        gridGlowSpeed: (v) => v.toFixed(2),
+        gridGlowSharpness: (v) => v.toFixed(1),
+        gridGlowDensity: (v) => v.toFixed(2),
+      };
+      for (const [id, fmt] of Object.entries(rangeMap)) {
+        const el = $(id);
+        const valEl = $(id + 'Val');
+        if (el) { el.value = params[id]; el.dispatchEvent(new Event('input')); }
+      }
+      // Color pickers
+      $('cubeColor').value = params.cubeColor;
+      $('keyColor').value = params.keyColor;
+      $('backColor').value = params.backColor;
+      $('bgColor').value = params.bgColor;
+      if (params.gridGlowColor) $('gridGlowColor').value = params.gridGlowColor;
+      // Trigger all color changes
+      for (const id of ['cubeColor', 'keyColor', 'backColor', 'bgColor', 'gridGlowColor']) {
+        $(id).dispatchEvent(new Event('input'));
+      }
+      // Auto-rotate
+      orbitControls.autoRotate = params.autoRotate;
+      $('autoRotateBtn').textContent = params.autoRotate ? 'On' : 'Off';
+      $('autoRotateBtn').classList.toggle('active', params.autoRotate);
+    }
+    syncUIFromParams();
+
+    // Section collapse toggles
+    document.querySelectorAll('.section-title').forEach((title) => {
+      title.addEventListener('click', () => {
+        const key = title.dataset.section;
+        const body = document.querySelector(`[data-body="${key}"]`);
+        if (body) {
+          body.classList.toggle('hidden');
+          title.classList.toggle('collapsed');
+        }
+      });
+    });
+
+    // Panel show/hide
+    const panel = $('panel');
+    const toggle = $('panel-toggle');
+    toggle.addEventListener('click', () => {
+      panel.style.display = 'block';
+      toggle.style.display = 'none';
+    });
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'f' || e.key === 'F') goFrontView();
+      if (e.key === 'r' || e.key === 'R') {
+        params.autoRotate = !params.autoRotate;
+        orbitControls.autoRotate = params.autoRotate;
+        $('autoRotateBtn').textContent = params.autoRotate ? 'On' : 'Off';
+        $('autoRotateBtn').classList.toggle('active', params.autoRotate);
+      }
+      if (e.key === 'h' || e.key === 'H') {
+        const visible = panel.style.display !== 'none';
+        panel.style.display = visible ? 'none' : 'block';
+        toggle.style.display = visible ? 'flex' : 'none';
+      }
+    });
+  </script>
+</body>
+</html>
